@@ -1,6 +1,19 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import random
+import google.generativeai as genai
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+api_key = os.getenv("API_KEY")
+print("API key:", api_key)
+
+
+genai.configure(api_key=api_key)
+
 
 app = Flask(__name__)
 CORS(app)
@@ -11,18 +24,19 @@ responses = {
     "goodbye": "Goodbye, see you soon.",
     "exit": "Goodbye, see you soon."
 }
-important_rules = [
-    "The game is played with two teams of 11 players each.",
-    "The objective is to score more goals than the opponent within 90 minutes.",
-    "The ball must completely cross the goal line between the goalposts and under the crossbar to count as a goal.",
-    "Offside rule: a player is offside if they are nearer to the opponent's goal line than both the ball and the second-last defender when receiving a pass.",
-    "No use of hands by outfield players except the goalkeeper within their penalty area.",
-    "A foul is awarded when a player commits an unfair act like tripping, pushing, or handball.",
-    "Free kicks and penalty kicks are awarded depending on the location and severity of fouls.",
-    "The referee enforces the rules and can issue yellow and red cards for misconduct.",
-    "The match is divided into two 45-minute halves with added stoppage time.",
-    "If the game is tied in knockout matches, extra time and possibly penalty shootouts determine the winner."
-]
+important_rules = {
+    "start of game rule" :"The game is played with two teams of 11 players each.",
+    "Main goal" :"The objective is to score more goals than the opponent within 90 minutes.",
+    "Goal rule" :"The ball must completely cross the goal line between the goalposts and under the crossbar to count as a goal.",
+    "Offside rule":" A player is offside if they are nearer to the opponent's goal line than both the ball and the second-last defender when receiving a pass.",
+    "Hands rule" :"No use of hands by outfield players except the goalkeeper within their penalty area.",
+    "Foul rule" :"A foul is awarded when a player commits an unfair act like tripping, pushing, or handball.",
+    "Freekick rule" :"Free kicks are awarded after fouls out of the penalty box .",
+    "Penalty rule" :" Penalty kicks are awarded when the foul is in the penalty box.",
+    "Cards rule":"The referee enforces the rules and can issue yellow and red cards for misconduct.",
+    "Time rule":"The match is divided into two 45-minute halves with added stoppage time.",
+    "Extra time rule":"If the game is tied in knockout matches, extra time and possibly penalty shootouts determine the winner."
+}
 
 
 
@@ -383,7 +397,7 @@ teams = {
     "Atlanta United team": ["MLS", "Mercedes-Benz Stadium", "Gonzalo Pineda", 1, "Miguel Almirón"],
     "Seattle Sounders team": ["MLS", "Lumen Field", "Brian Schmetzer", 2, "Raúl Ruidíaz"],
     
-    "Ludogorets Razgrad team": ["First Professional Football League", "Ludogorets Arena", "Ante Šimundža", 12, "Claudiu Keșerü"],
+    "Ludogorets Razgrad team": ["First Professional Football League", "Nobogy knows", "Ante Šimundža", 12, "Claudiu Keșerü"],
     "CSKA Sofia team": ["First Professional Football League", "Balgarska Armia Stadium", "Stanimir Stoilov", 31, "Ali Sowe"],
     "Levski Sofia team": ["First Professional Football League", "Georgi Asparuhov Stadium", "Elin Topuzakov", 26, "Pieros Sotiriou"],
     "Cherno More Varna team": ["First Professional Football League", "Ticha Stadium", "Ilian Iliev", 4, "Ricardo Nunes"],
@@ -457,83 +471,99 @@ national_teams = {
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_message = request.json.get("message", "").lower()
+    user_message = request.json.get("message", "")
 
-   
+    # Първо търсим в бързите отговори
     for key in responses:
-        if key in user_message:
+        if key in user_message.lower():
             return jsonify({"response": responses[key]})
 
+    # Правила - ако потребителят пита за конкретно правило
+    if "rule" in user_message.lower():
+        for rule in important_rules:
+            if rule.lower() in user_message.lower():
+                return jsonify({"response": important_rules[rule]})
 
-    if "formation" in user_message:
+    # Ако пита за всички правила
+    if "rules" in user_message.lower():
+        formatted_rules = "\n".join([f"{title}: {text}" for title, text in important_rules.items()])
+        return jsonify({"response": f"These are the most common rules in football:\n{formatted_rules}"})
+
+    # Други локални отговори - по твоя оригинален код
+    if "formation" in user_message.lower():
         return jsonify({"response": f"One of the most used formations is {random.choice(formations)}."})
-    if "formations" in user_message:
-        return jsonify({"response": f"Here are all the formations I know {formations}."})
 
-    if "derby" in user_message:
+    if "formations" in user_message.lower():
+        return jsonify({"response": f"Here are all the formations I know: {formations}."})
+
+    if "derby" in user_message.lower() or "derbys" in user_message.lower():
         return jsonify({"response": f"One of the biggest derbies is {random.choice(biggerst_derbys)}."})
-    if "derbys" in user_message:
-        return jsonify({"response": f"I know some derbies  {biggerst_derbys}."})
-    if "team" in user_message:
-     for team in teams:
-        if team.lower() in user_message.lower():
-            info = teams[team]
-            return jsonify({
-                "response": f"{team} plays in {info[0]}, their stadium is {info[1]}, the manager is {info[2]}, they’ve won {info[3]} titles, and their star player is {info[4]} ."
-            })
-    if "rules" in user_message:
-        return jsonify({"response:" f"This are the most common rules in football {important_rules}"})
-    if "teams" in user_message:
-        return jsonify({"response:" f"I know a lot of teams {teams}"})
-    if "national teams" in user_message:
-            for team in national_teams:
-               if team.lower() in user_message.lower():
-                 info = national_teams[team]
-                 return jsonify({
-                    "response": f"{team} plays on {info[0]}, their manager  is {info[1]}, they have won {info[2]} world cups , their best player of all time is {info[3]}."
-            })
- 
-    if  "manager" in user_message:
+
+    if "team" in user_message.lower():
+        for team in teams:
+            if team.lower() in user_message.lower():
+                info = teams[team]
+                return jsonify({
+                    "response": f"{team} plays in {info[0]}, their stadium is {info[1]}, the manager is {info[2]}, they’ve won {info[3]} titles, and their star player is {info[4]}."
+                })
+
+    if "teams" in user_message.lower():
+        return jsonify({"response": f"I know a lot of teams: {list(teams.keys())}"})
+
+    if "national team" in user_message.lower() or "national teams" in user_message.lower():
+        for team in national_teams:
+            if team.lower() in user_message.lower():
+                info = national_teams[team]
+                return jsonify({
+                    "response": f"{team} plays at {info[0]}, their manager is {info[1]}, they have won {info[2]} World Cups, and their best player of all time is {info[3]}."
+                })
+
+    if "coach" in user_message.lower() or "coaches" in user_message.lower():
         return jsonify({"response": f"One of the best coaches is {random.choice(best_coaches)}."})
-    if "coaches" in user_message:
-     return jsonify({"response": f"I know a lot of coaches {best_coaches}."})
-    if "coach" in user_message:
-      for coach in best_coaches:
-               if coach.lower() in user_message.lower():
-                 info = best_coaches[coach]
-                 return jsonify({
-                    "response": f"{coach}."
-            })
-    if "player" in user_message:
+
+    if "players" in user_message.lower():
+        return jsonify({"response": f"One of the best players is {random.choice(list(Star_players.keys()))}."})
+
+    if "player" in user_message.lower():
         for player in Star_players:
-               if player.lower() in user_message.lower():
-                 info = Star_players[player]
-                 return jsonify({
-                    "response": f"{player} has {info[0]} goals and  {info[1]} assists,  {info[2]} ballon'ors  and  {info[3]} golden boots, he is from {info[4]} ."
-            })
- 
+            if player.lower() in user_message.lower():
+                info = Star_players[player]
+                return jsonify({
+                    "response": f"{player} has {info[0]} goals, {info[1]} assists, {info[2]} Ballon d'Ors, {info[3]} Golden Boots, and he is from {info[4]}."
+                })
 
-    if "competition" in  user_message:
-        return jsonify({"response": f"One of the best competitions is {random.choice(competitions)}."})
-    if "competition" in  user_message:
-        return jsonify({"response": f"I know a lot of competitions {competitions}."})
-    if "UCL" in user_message:
+    if "competition" in user_message.lower():
+        return jsonify({"response": f"Here are some competitions I know: {competitions}"})
+
+    if "ucl" in user_message.lower():
         return jsonify({"response": competitions[0]})
-    if "UEL" in  user_message:
-        return jsonify({"response": competitions[1]})
-    if "UECL"  in user_message:
-        return jsonify({"response": competitions[2]})
-    if "World cup"  in user_message:
-        return jsonify({"response": competitions[3]}) 
-    
 
-    if "happy" in user_message:
+    if "uel" in user_message.lower():
+        return jsonify({"response": competitions[1]})
+
+    if "uecl" in user_message.lower():
+        return jsonify({"response": competitions[2]})
+
+    if "world cup" in user_message.lower():
+        return jsonify({"response": competitions[3]})
+
+    if "happy" in user_message.lower():
         return jsonify({"response": random.choice(happy_responses)})
 
-    if "angry" in user_message:
+    if "angry" in user_message.lower():
         return jsonify({"response": random.choice(angry_responses)})
 
-    return jsonify({"response": random.choice(unknown_answers)})
+    # Ако никой от локалните отговори не хване въпроса, питаме Gemini AI
+    try:
+        response = genai.chat.completions.create(
+            model="models/chat-bison-001",
+            messages=[{"author": "user", "content": user_message}],
+        )
+        gemini_reply = response.candidates[0].content
+        return jsonify({"response": gemini_reply})
+    except Exception as e:
+        # Фолбек отговор, ако нещо се счупи
+        return jsonify({"response": "Sorry, I couldn't process your request right now."})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
